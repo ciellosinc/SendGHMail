@@ -19,7 +19,7 @@ inputs:
     description: 'Sender mailbox (UPN or email of a mailbox the Entra app is allowed to send as)'
     required: true
   AzureCredentialsJson:
-    description: 'JSON with tenantId, clientId and clientSecret of the Entra app with Mail.Send application permission'
+    description: 'JSON with tenantId, clientId and (optional) clientSecret of the Entra app allowed to send mail. Without clientSecret, the GitHub OIDC token is used (federated credential, job needs permissions id-token: write)'
     required: true
 
 runs:

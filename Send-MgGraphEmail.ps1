@@ -42,13 +42,31 @@ catch {
 }
 
 # Step 3: Get a Microsoft Graph token (client credentials)
+# With a clientSecret the secret is used, otherwise the GitHub OIDC token (federated credential, no secret)
 try {
-    $tokenResponse = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$($AzureCredentials.tenantId)/oauth2/v2.0/token" -Body @{
-        client_id     = $AzureCredentials.clientId
-        client_secret = $AzureCredentials.clientSecret
-        scope         = 'https://graph.microsoft.com/.default'
-        grant_type    = 'client_credentials'
+    $tokenBody = @{
+        client_id  = $AzureCredentials.clientId
+        scope      = 'https://graph.microsoft.com/.default'
+        grant_type = 'client_credentials'
     }
+    if ($AzureCredentials.PSObject.Properties.Name -contains 'clientSecret' -and $AzureCredentials.clientSecret) {
+        $tokenBody.client_secret = $AzureCredentials.clientSecret
+        Write-Host "Authenticating with client secret."
+    }
+    else {
+        if (-not $env:ACTIONS_ID_TOKEN_REQUEST_URL) {
+            Write-Host "::Error::No clientSecret and no GitHub OIDC token available. Add 'permissions: id-token: write' to the workflow job."
+            exit 1
+        }
+        $oidc = Invoke-RestMethod -Uri "$($env:ACTIONS_ID_TOKEN_REQUEST_URL)&audience=api://AzureADTokenExchange" -Headers @{ Authorization = "Bearer $($env:ACTIONS_ID_TOKEN_REQUEST_TOKEN)" }
+        # Show the subject claim (not secret) to help configuring the federated credential in Entra ID
+        $payload = $oidc.value.Split('.')[1].Replace('-', '+').Replace('_', '/')
+        $payload = $payload.PadRight($payload.Length + (4 - $payload.Length % 4) % 4, '=')
+        Write-Host "Authenticating with GitHub OIDC (federated credential). Subject: $(([Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($payload)) | ConvertFrom-Json).sub)"
+        $tokenBody.client_assertion_type = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer'
+        $tokenBody.client_assertion = $oidc.value
+    }
+    $tokenResponse = Invoke-RestMethod -Method Post -Uri "https://login.microsoftonline.com/$($AzureCredentials.tenantId)/oauth2/v2.0/token" -Body $tokenBody
     Write-Host "Connected to Microsoft Graph."
 }
 catch {
