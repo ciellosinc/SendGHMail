@@ -1,22 +1,25 @@
 name: 'Send Email Composite Action'
-description: 'A composite action to send an email using Microsoft Graph'
+description: 'A composite action to send an email using Microsoft Graph (client credentials, Mail.Send application permission)'
 
 inputs:
   ToEmail:
-    description: 'Recipient email address'
+    description: 'Recipient email addresses, comma separated'
     required: true
+  CcEmail:
+    description: 'CC email addresses, comma separated'
+    required: false
+    default: ''
   Subject:
     description: 'Subject of the email'
     required: true
   emailBodyBase64:
-    description: 'Base64-encoded body content'
+    description: 'Base64 encoded HTML body content'
     required: true
   FromEmail:
-    description: 'Sender email address'
+    description: 'Sender mailbox (UPN or email of a mailbox the Entra app is allowed to send as)'
     required: true
-    default: 'test@gmail.com'
   AzureCredentialsJson:
-    description: 'Azure credentials JSON secret'
+    description: 'JSON with tenantId, clientId and clientSecret of the Entra app with Mail.Send application permission'
     required: true
 
 runs:
@@ -24,5 +27,12 @@ runs:
   steps:
     - name: 'Send Email Using PowerShell Script'
       shell: pwsh
+      env:
+        _toEmail: ${{ inputs.ToEmail }}
+        _ccEmail: ${{ inputs.CcEmail }}
+        _subject: ${{ inputs.Subject }}
+        _emailBodyBase64: ${{ inputs.emailBodyBase64 }}
+        _fromEmail: ${{ inputs.FromEmail }}
+        _azureCredentialsJson: ${{ inputs.AzureCredentialsJson }}
       run: |
-        try { ${{ github.action_path }}/Send-MgGraphEmail.ps1 -ToEmail ${{ inputs.ToEmail }} -CcEmail ${{ inputs.CcEmail }} -Subject ${{ inputs.Subject }} -emailBodyBase64 ${{ inputs.emailBodyBase64 }} -FromEmail ${{ inputs.FromEmail }} -AzureCredentialsJson ${{ inputs.AzureCredentialsJson }} } catch { Write-Host "::Error::Unexpected error when running action ($($_.Exception.Message))"; exit 1 }
+        try { & (Join-Path $env:GITHUB_ACTION_PATH 'Send-MgGraphEmail.ps1') -ToEmail $env:_toEmail -CcEmail $env:_ccEmail -Subject $env:_subject -emailBodyBase64 $env:_emailBodyBase64 -FromEmail $env:_fromEmail -AzureCredentialsJson $env:_azureCredentialsJson } catch { Write-Host "::Error::Unexpected error when running action ($($_.Exception.Message))"; exit 1 }
